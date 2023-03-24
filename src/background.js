@@ -9,31 +9,30 @@ chrome.storage.sync.get({
 });
 
 chrome.webRequest.onBeforeRequest.addListener(function (details) {
-    if( details.method === "GET" && details.type === "main_frame" ) {
-        var loweredUrl = details.url.toLowerCase();
+    if (details.method === "GET" && details.type === "main_frame") {
+        const [host, queryParams] = details.url.split('?');
+        
+        let hasUpdatedParams = false;
+        
+        const params = new URLSearchParams(queryParams);
+        const hasAuthUser = params.has('authuser');
+        if (hasAuthUser || (hasAuthUser && force)) {
+            params.set('authuser', authuser);
+            hasUpdatedParams = true;
+        }
 
-        var authUserExists = loweredUrl.indexOf('authuser') >= 0;
-        var authUserIsSame = authUserExists && loweredUrl.indexOf('authuser=' + authUser) >= 0;
+        const isSupportedHost = (
+            host.includes('https://meet.google.com')
+            || host.includes('https://console.cloud.google.com')
+        );
 
-        var shouldRedirect = ( !authUserExists  || (!authUserIsSame && force ) ) && parseInt(authUser) > 0;
-        var isRedirectUriCorrect = ( /meet.google.com\/.*-.*-.*/.test(details.url) || details.url === 'https://meet.google.com/' || 'https://meet.google.com/landing' || 'https://meet.google.com/new' );
-
-        if ( shouldRedirect && isRedirectUriCorrect ) {
-            var params = new URLSearchParams(details.url.split('?')[1]);
-
-            for (var pair of params.entries()) {
-                if( pair[0].toLowerCase() === "authuser" ) {
-                    params.delete(pair[0]);
-                }
-            }
-
-            params.set('authuser', authUser);
-
-            return {
-                redirectUrl: details.url.split('?')[0] + "?" + params.toString()
-            };
+        if (hasUpdatedParams && isSupportedHost) {
+            return { redirectUrl: `${host}?${params.toString()}` };
         }
     }
 }, {
-    urls: ["https://meet.google.com/*"] 
+    urls: [
+      "https://meet.google.com/*",
+      "https://console.cloud.google.com/*"
+    ] 
 }, ["blocking"]);
